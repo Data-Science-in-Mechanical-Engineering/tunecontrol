@@ -1,0 +1,28 @@
+[project]
+name = "tunecontrol"
+version = "0.1.0"
+description = "A benchmark suite for controller tuning."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "matplotlib",
+    "torch>=2.2",
+]
+
+[project.optional-dependencies]
+botorch = [
+    "botorch==0.15.1",
+]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+include = ["tunecontrol*"]
+exclude = ["scratch*", "tests*", "docs*"]

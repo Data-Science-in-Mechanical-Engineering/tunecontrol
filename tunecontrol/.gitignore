@@ -1,0 +1,17 @@
+# Environments
+.venv/
+uv.lock
+
+# Caches
+__pycache__/
+.pytest_cache/
+
+# OS files
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Benchmark outputs
+runs/
