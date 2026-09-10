@@ -71,8 +71,8 @@ class Task(ABC):
     def evaluate(self, theta: Tensor) -> Tuple[Tensor, Dict[str, Any]]:
         """Evaluate one finite floating-point controller vector.
 
-        Bounds describe the recommended search space; finite out-of-bounds
-        controllers are allowed and are never clipped. Nonfinite objective
+        Bounds define the allowed controller domain, including both endpoints.
+        Out-of-bounds controllers raise ValueError before simulation. Nonfinite objective
         results return NaN with the diagnostics dictionary preserved.
         """
         if not isinstance(theta, Tensor) or not theta.is_floating_point():
@@ -82,6 +82,10 @@ class Task(ABC):
             raise ValueError(f"theta must have shape ({self.dim},), got {tuple(theta.shape)}")
         if not torch.isfinite(theta).all():
             raise ValueError("theta must contain only finite values")
+
+        bounds = self.bounds.to(dtype=theta.dtype, device=theta.device)
+        if ((theta < bounds[0]) | (theta > bounds[1])).any():
+            raise ValueError("theta must lie within the declared bounds (inclusive)")
 
         value, info = self._evaluate(theta)
         if not isinstance(info, dict):

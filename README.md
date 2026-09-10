@@ -1,6 +1,6 @@
 # TuneControl
 
-A growing collection of **black-box controller-tuning problems** with a common
+A collection of **black-box controller-tuning problems** with a common
 Python interface. Choose a problem and objective, supply controller gains, and
 receive a scalar cost plus the simulated trajectory.
 
@@ -100,8 +100,9 @@ full configuration, package version, and seed when saving an experiment. Seeded
 replay assumes the same software and runtime environment.
 
 `evaluate` accepts a finite floating-point tensor of shape `(problem.dim,)`.
-Finite gains outside the search bounds are allowed. Invalid inputs raise errors;
-undefined or nonfinite objectives return `(NaN, info)` with diagnostics preserved.
+Gains must lie within the declared bounds, including the endpoints. Out-of-bounds
+gains raise `ValueError` before simulation. Other invalid inputs also raise errors.
+Undefined or nonfinite objectives return `(NaN, info)` with diagnostics preserved.
 Check `torch.isnan(value)` before using a cost in an optimizer. Penalty handling
 belongs to the optimizer or example, rather than the problem itself.
 

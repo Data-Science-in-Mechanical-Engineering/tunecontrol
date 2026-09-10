@@ -4,7 +4,7 @@
 The cart–pole benchmark models an inverted pendulum mounted on a cart that must reject step changes in reference position. A fixed-structure state-feedback controller sets the control input to keep the pole upright while tracking the position command. Variants in TuneControl cover 1–4 decision variables, three objectives, and deterministic or noisy simulations for benchmarking controller-tuning and Bayesian-optimisation routines.
 
 ## Decision variables
-All variants parameterise the feedback gain vector \(K = [k_x, k_{\dot{x}}, k_\phi, k_{\dot{\phi}}]\). Depending on the requested dimensionality, leading entries fall back to an LQR baseline while the remaining suffix is optimised. Bounds describe the search box directly in gain coordinates (no logarithmic transform); evaluation does not clip gains.
+All variants parameterise the feedback gain vector \(K = [k_x, k_{\dot{x}}, k_\phi, k_{\dot{\phi}}]\). Depending on the requested dimensionality, leading entries fall back to an LQR baseline while the remaining suffix is optimised. Bounds describe the search box directly in gain coordinates (no logarithmic transform); evaluation rejects gains outside the bounds and accepts both endpoints.
 
 | Dimension | Tuned entries (suffix of \(K\)) | Bounds (lower, upper) |
 |-----------|---------------------------------|-----------------------|

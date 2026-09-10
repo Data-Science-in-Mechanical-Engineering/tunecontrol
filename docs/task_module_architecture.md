@@ -110,8 +110,9 @@ Document the physical model, objective definition, units, and initial conditions
 `evaluate(theta)` validates the floating-point type, exact `(dim,)` shape, finite
 parameters, and finite ordered `[2, dim]` bounds before calling `_evaluate`.
 Constructors should also call `validate_bounds` from `tunecontrol.tasks.base` after
-setting bounds. Finite controllers outside the search box are permitted; no
-clipping occurs. `normalize` and `unnormalize` validate bounds and support batches
+setting bounds. Controllers outside the search box raise `ValueError` before
+simulation. Both endpoints are included, and gains are never clipped. Bounds are
+compared in the controller tensor's dtype and device. `normalize` and `unnormalize` validate bounds and support batches
 and extrapolation.
 
 Return exactly one real objective value and a diagnostics dictionary. The common

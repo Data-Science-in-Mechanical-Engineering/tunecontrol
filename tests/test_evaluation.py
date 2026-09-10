@@ -81,11 +81,32 @@ class EvaluationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "simulation bug"):
                 task.evaluate(torch.zeros(2))
 
-    def test_outside_search_box_is_not_clipped(self):
-        theta = torch.tensor([-1., 3.])
-        value, info = Example().evaluate(theta)
-        self.assertEqual(value.item(), 2.)
-        torch.testing.assert_close(info["theta"], theta)
+    def test_outside_search_box_never_reaches_simulator(self):
+        for family in (Example, tc.CartPole, tc.CascadedTank):
+            task = family()
+            for dtype in (torch.float32, torch.float64):
+                bounds = task.bounds.to(dtype=dtype)
+                for side, direction in ((0, -float("inf")), (1, float("inf"))):
+                    for dim in range(task.dim):
+                        theta = bounds.mean(0)
+                        theta[dim] = torch.nextafter(bounds[side, dim], theta.new_tensor(direction))
+                        with self.subTest(family=family, dtype=dtype, side=side, dim=dim):
+                            with patch.object(task, "_evaluate") as evaluate:
+                                with self.assertRaisesRegex(ValueError, "within the declared bounds"):
+                                    task.evaluate(theta)
+                                evaluate.assert_not_called()
+
+    def test_boundary_gains_are_accepted_without_modification(self):
+        for family in (Example, tc.CartPole, tc.CascadedTank):
+            task = family()
+            for dtype in (torch.float32, torch.float64):
+                for theta in task.bounds.to(dtype=dtype):
+                    original = theta.clone()
+                    with patch.object(task, "_evaluate", return_value=(0., {})) as evaluate:
+                        task.evaluate(theta)
+                        evaluate.assert_called_once()
+                        self.assertIs(evaluate.call_args.args[0], theta)
+                        torch.testing.assert_close(theta, original)
 
     def test_transform_validation_and_batched_round_trip(self):
         theta = torch.tensor([[0., 2.], [-3., 8.]], dtype=torch.float64)
