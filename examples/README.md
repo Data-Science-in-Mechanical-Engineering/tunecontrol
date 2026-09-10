@@ -4,6 +4,9 @@ Install from the repository root with `python -m pip install -e '.[botorch]'`.
 The Python scripts need only the base package. To open the notebooks, use your
 editor's notebook support or install Jupyter separately. Run notebook cells in order.
 
+Commit notebooks after restarting the kernel and running every cell, with text
+outputs and plots saved so readers can inspect the results on GitHub.
+
 | Example | Purpose |
 |---|---|
 | [quickstart.py](quickstart.py) | Construct, evaluate, and plot both built-in problems |
