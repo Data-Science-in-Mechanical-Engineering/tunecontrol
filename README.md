@@ -25,7 +25,6 @@ python -m pip install "tunecontrol[botorch] @ git+https://github.com/Data-Scienc
 ```
 
 For development from a local checkout, run `python -m pip install -e '.[dev,botorch]'`.
-The [release guide](docs/releasing.md) covers publishing to PyPI.
 
 ## Evaluate a controller
 

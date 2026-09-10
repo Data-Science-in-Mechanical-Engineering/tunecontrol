@@ -1,4 +1,3 @@
 include CITATION.cff
-include docs/releasing.md
 recursive-include tests *.py
 include examples/standard_bo_for_controller_tuning.ipynb
