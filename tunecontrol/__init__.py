@@ -1,38 +1,25 @@
-"""Bayesian optimization benchmark suite.
+"""Controller-tuning problems with explicit, validated configurations."""
+from importlib import import_module
 
-This package provides a modular framework for evaluating Bayesian
-optimization algorithms on pluggable tasks.
-"""
+from .registry import available_configs, describe, list_problems, make, register_problem
+from .tasks import Task, normalize, unnormalize
 
-from typing import Any
+_EXPORTS = {
+    "CartPole": "cartpole",
+    "CartPoleConfig": "cartpole",
+    "CartPoleNoise": "cartpole",
+    "CascadedTank": "cascaded_tank",
+    "CascadedTankConfig": "cascaded_tank",
+    "CascadedTankNoise": "cascaded_tank",
+    "CascadedTankDynamics": "cascaded_tank",
+}
+__all__ = ["Task", "make", "list_problems", "describe", "available_configs",
+           "register_problem", "normalize", "unnormalize", *_EXPORTS]
 
-from .tasks import Task, from_name
 
-__all__ = ["make", "Task"]
-
-def make(name: str, /, *args: Any, **overrides: Any) -> Task:
-    """Return a registered task by name.
-
-    Args:
-        name: Registry key for the desired task (case-insensitive).
-        *args: Positional arguments forwarded to the underlying factory.
-        **overrides: Keyword arguments forwarded to the underlying factory.
-
-    Returns:
-        Task: Instantiated task ready for evaluation via ``task.evaluate``.
-
-    Raises:
-        TypeError: If ``name`` is not a string.
-        ValueError: If ``name`` is empty or unknown.
-    """
-    if not isinstance(name, str):
-        raise TypeError("name must be a string")
-
-    key = name.strip()
-    if not key:
-        raise ValueError("name must be a non-empty string")
-
-    #try:
-    return from_name(key, *args, **overrides)
-    #except ValueError as exc:
-    #    raise ValueError(f"Unknown use case: {name}") from exc
+def __getattr__(name):
+    if name not in _EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f".tasks.{_EXPORTS[name]}", __name__), name)
+    globals()[name] = value
+    return value

@@ -1,89 +1,49 @@
-"""Task wrapper for the cascaded tank benchmark."""
-
-from __future__ import annotations
-
-from typing import Dict
+"""Cascaded tank controller-tuning problem."""
+from dataclasses import asdict
+from typing import Any, Dict, Tuple
 
 import torch
 
-from ..base import Task
-from ..module_utils import detach_trajectory, TaskConfig
-from .objectives import (
-    CascadedTankObjectiveSpec,
-    get_cascaded_tank_objective_spec,
-    list_cascaded_tank_objectives,
-)
-from .plant import CascadedTankSimulator, Trajectory
-
-__all__ = ["CascadedTankTask"]
+from ..base import Task, validate_bounds
+from ..module_utils import detach_trajectory
+from .config import CascadedTankConfig, CascadedTankNoise
+from .objectives import get_cascaded_tank_objective_spec, list_cascaded_tank_objectives
+from .plant import CascadedTankSimulator
 
 
-def _bounds_tensor() -> torch.Tensor:
-    lower = torch.tensor([0.9, 0.01], dtype=torch.float64)
-    upper = torch.tensor([4.5, 0.16], dtype=torch.float64)
-    return torch.stack((lower, upper))
+class CascadedTank(Task):
+    config_type = CascadedTankConfig
 
-
-class CascadedTankTask(Task):
-    """Cascaded tank PI tuning benchmark task."""
-
-    def __init__(
-        self,
-        *,
-        objective: str,
-        noise_std: float,
-        duration: float = 1000.0,
-        target: float = 4.0,
-        dynamic_params: Dict[str, float] | None = None,
-    ) -> None:
-        obj_key = objective.strip().lower()
-        try:
-            spec = get_cascaded_tank_objective_spec(obj_key)
-        except KeyError as exc:
-            raise ValueError(
-                f"Unknown objective '{objective}'. "
-                f"Available options: {', '.join(list_cascaded_tank_objectives())}."
-            ) from exc
-
+    def __init__(self, config: CascadedTankConfig | None = None):
+        config = CascadedTankConfig() if config is None else config
+        if not isinstance(config, CascadedTankConfig):
+            raise TypeError("config must be CascadedTankConfig")
+        self.config = config
         self.dim = 2
-        self.objective = obj_key
-        self._objective_spec: CascadedTankObjectiveSpec = spec
-        self._objective_label = spec.display_name
-        self.is_minimization = spec.is_minimization
+        self.objective = config.objective
+        self._objective_spec = get_cascaded_tank_objective_spec(config.objective)
+        self._objective_label = self._objective_spec.display_name
+        self.is_minimization = self._objective_spec.is_minimization
+        self.bounds = torch.tensor([[0.9, 0.01], [4.5, 0.16]], dtype=torch.float64)
+        dynamics = asdict(config.dynamics)
+        dynamics["initial_state"] = torch.tensor(dynamics["initial_state"], dtype=torch.float64)
+        validate_bounds(self.bounds, self.dim)
         self._sim = CascadedTankSimulator(
-            duration=duration,
-            target=target,
-            noise_std=noise_std,
-            dynamic_kwargs=dict(dynamic_params or {}),
+            duration=config.duration,
+            target=config.target,
+            noise_std=0.0 if config.noise is None else config.noise.std,
+            dynamic_kwargs=dynamics,
         )
-        self.simulation_noise = float(noise_std)
-        self.bounds = _bounds_tensor()
-        self.data: Trajectory | None = None
-        self.config = TaskConfig(
-            name="CascadedTank",
-            dim=self.dim,
-            bounds=self.bounds,
-            is_minimization=self.is_minimization,
-            metadata={
-                "objective": self.objective,
-                "duration": duration,
-                "target": target,
-                "noise_std": noise_std,
-            },
-        )
+        self.data = None
 
     @property
     def name(self) -> str:  # type: ignore[override]
         label = self._objective_label or self.objective.upper()
         return f"CascadedTank-{label}-2D"
 
-    def setup(self, run_seed: int | None = None) -> None:
-        if run_seed is not None:
-            torch.manual_seed(run_seed)
-
     def _evaluate(self, theta: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, Any]]:
         kp, ki = float(theta[0]), float(theta[1])
-        trajectory = self._sim.simulate(kp, ki)
+        trajectory = self._sim.simulate(kp, ki, generator=self.generator)
         value_tensor = self._objective_spec.evaluate(self._sim, trajectory)
         self.data = trajectory
 
@@ -94,5 +54,13 @@ class CascadedTankTask(Task):
             "trajectory": trajectory_torch,
         }
 
-        value_tensor = value_tensor.to(dtype=theta.dtype, device=theta.device)
         return value_tensor, info
+
+    @classmethod
+    def available_configs(cls) -> list[CascadedTankConfig]:
+        """Enumerate standard variants; custom configurations are also accepted."""
+        return [
+            CascadedTankConfig(objective=objective, noise=noise)
+            for objective in list_cascaded_tank_objectives()
+            for noise in (None, CascadedTankNoise())
+        ]

@@ -1,34 +1,27 @@
-"""Quickstart example: evaluate a single task and inspect metadata."""
+"""Evaluate and plot both built-in problems: python examples/quickstart.py."""
+import matplotlib.pyplot as plt
 
-from __future__ import annotations
-
-import tunecontrol as tc
-
-
-def _print_info_keys(info, indent=0):
-    """Recursively print the keys of an info dictionary."""
-    pad = "  " * indent
-    if isinstance(info, dict):
-        for key, value in info.items():
-            print(f"{pad}- {key}")
-            _print_info_keys(value, indent + 1)
-    elif isinstance(info, (list, tuple)):
-        print(f"{pad}- list[{len(info)}]")
-        for item in info:
-            _print_info_keys(item, indent + 1)
+from tunecontrol import CartPole, CartPoleConfig, CascadedTank, CascadedTankConfig
+from tunecontrol.tasks.cartpole import plot_episode as plot_cartpole
+from tunecontrol.tasks.cascaded_tank import plot_episode as plot_tanks
 
 
-def main() -> None:
-    task = tc.make("cartpole/2d/mae/deterministic")
-    theta = (task.bounds[0] + task.bounds[1]) / 2
-
-    value, info = task.evaluate(theta)
-
-    print("Task:", task.name)
-    print("Theta:", theta.tolist())
-    print("Objective value:", float(value.item()))
-    print("Info keys:")
-    _print_info_keys(info)
+def main():
+    problems = [
+        (CartPole(CartPoleConfig(dim=2, objective="mae")), plot_cartpole),
+        (CascadedTank(CascadedTankConfig(objective="quadratic")), plot_tanks),
+    ]
+    for problem, plot in problems:
+        # Bounds identify the search space; their midpoint is just an example.
+        theta = problem.bounds.mean(dim=0)
+        value, info = problem.evaluate(theta)
+        print(problem.config)
+        print("Controller:", theta.tolist(), "Cost:", value.item())
+        trajectory = info["trajectory"]
+        print("State columns:", trajectory["state_names"])
+        print("Samples:", len(trajectory["time"]))
+        plot(trajectory)
+    plt.show()
 
 
 if __name__ == "__main__":

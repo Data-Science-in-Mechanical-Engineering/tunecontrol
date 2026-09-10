@@ -42,7 +42,7 @@ python -m venv /tmp/tunecontrol-release-test
 Use a fresh output directory (or remove old build artifacts) for each release and
 substitute the new wheel filename when the version changes. The default build
 creates the wheel from the source distribution, checking both release formats.
-The tests exercise all 34 registered tasks and deterministic repeatability.
+The tests exercise all 34 standard configurations and deterministic repeatability.
 
 ## Publish
 

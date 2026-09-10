@@ -11,21 +11,16 @@ import numpy as np
 import tunecontrol as tc
 
 
-TASKS: Sequence[str] = (
-    "cartpole/2d/itae/deterministic",
-    "cartpole/2d/lqr/deterministic",
-    "cartpole/2d/mae/deterministic",
-    "cascaded_tank/2d/logsse/deterministic",
-    "cascaded_tank/2d/overshoot/deterministic",
-    "cascaded_tank/2d/quadratic/deterministic",
-    "cascaded_tank/2d/rise_time/deterministic",
-    "cascaded_tank/2d/sse/deterministic",
-)
+TASKS = [
+    (family, config)
+    for family in tc.list_problems()
+    for config in tc.available_configs(family)
+    if config.noise is None and getattr(config, "dim", 2) == 2
+]
 GRID_POINTS = 10
 
 
-def evaluate_on_grid(task_id: str, grid_size: int = GRID_POINTS) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    task = tc.make(task_id)
+def evaluate_on_grid(task: tc.Task, grid_size: int = GRID_POINTS) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     lower = task.bounds[0].numpy()
     upper = task.bounds[1].numpy()
 
@@ -44,17 +39,23 @@ def evaluate_on_grid(task_id: str, grid_size: int = GRID_POINTS) -> tuple[np.nda
     return mesh0, mesh1, values
 
 
-def plot_gallery(tasks: Sequence[str], *, output: str | None = None, show: bool = True) -> None:
+def plot_gallery(tasks: Sequence[tuple[str, object]], *, output: str | None = None, show: bool = True) -> None:
     cols = 4
     rows = int(np.ceil(len(tasks) / cols))
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows))
     axes = np.array(axes).reshape(rows, cols)
 
-    for ax, task_id in zip(axes.flat, tasks):
-        mesh0, mesh1, values = evaluate_on_grid(task_id)
-        contour = ax.contourf(mesh0, mesh1, values, levels=30, cmap="viridis")
-        fig.colorbar(contour, ax=ax)
-        ax.set_title(task_id)
+    for ax, (family, config) in zip(axes.flat, tasks):
+        task = tc.make(family, config)
+        mesh0, mesh1, values = evaluate_on_grid(task)
+        if np.isfinite(values).any():
+            contour = ax.contourf(mesh0, mesh1, np.ma.masked_invalid(values), levels=30, cmap="viridis")
+            fig.colorbar(contour, ax=ax)
+        else:
+            ax.text(0.5, 0.5, "No finite evaluations", ha="center", transform=ax.transAxes)
+        undefined = np.count_nonzero(~np.isfinite(values))
+        suffix = f" ({undefined} undefined)" if undefined else ""
+        ax.set_title(f"{family}: {config.objective}{suffix}")
         ax.set_xlabel("theta[0]")
         ax.set_ylabel("theta[1]")
 

@@ -2,32 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-try:  # Optional torch import for type checking
-    import torch
-except ModuleNotFoundError:  # pragma: no cover - torch is a required dep in practice
-    torch = None  # type: ignore[assignment]
+import torch
 
 __all__ = ["plot_episode"]
 
 
 def _to_numpy(array: Sequence[float]) -> np.ndarray:
-    if torch is not None and isinstance(array, torch.Tensor):
+    if isinstance(array, torch.Tensor):
         return array.detach().cpu().numpy()
     return np.asarray(array, dtype=np.float64)
 
 
-def plot_episode(trajectory: Mapping[str, Sequence[float]], *, title: str = "Cascaded Tank Episode") -> None:
+def plot_episode(trajectory: Mapping[str, Any], *, title: str = "Cascaded Tank Episode") -> None:
     """Plot a cascaded tank trajectory using matplotlib."""
-    import matplotlib.pyplot as plt  # Local import to keep dependency optional
+    import matplotlib.pyplot as plt
 
     time = _to_numpy(trajectory.get("time", []))
-    x1 = _to_numpy(trajectory.get("x1", []))
-    x2 = _to_numpy(trajectory.get("x2", []))
-    u = _to_numpy(trajectory.get("u", []))
+    x1 = _to_numpy(trajectory["states"][:, 0])
+    x2 = _to_numpy(trajectory["states"][:, 1])
+    u = _to_numpy(trajectory["inputs"][:, 0])
 
     if time.size == 0:
         raise ValueError("Trajectory must include 'time' samples.")

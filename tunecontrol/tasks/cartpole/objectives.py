@@ -50,7 +50,8 @@ def _itae_cost(sim: CartPoleSimulator, traj: Trajectory) -> torch.Tensor:
     inputs = _inputs_column(traj)
     Q, R = sim.cost_weights
     state_error = torch.abs(states @ Q).sum(dim=1)
-    time_weights = torch.arange(1, states.shape[0] + 1, dtype=states.dtype, device=states.device)
+    time = traj["time"].to(dtype=states.dtype, device=states.device)
+    time_weights = time - time[0]
     itae = (time_weights * state_error).mean()
     quadratic_input = torch.einsum("ni,ij,nj->n", inputs, R, inputs).mean()
     return itae + quadratic_input

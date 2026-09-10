@@ -1,3 +1,4 @@
 include CITATION.cff
 include docs/releasing.md
-include tests/test_distribution.py
+recursive-include tests *.py
+include examples/standard_bo_for_controller_tuning.ipynb

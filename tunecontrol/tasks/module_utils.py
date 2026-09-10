@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 from typing import Any, Callable, Dict, Iterable, Mapping
 
 import torch
 
 
-Trajectory = Dict[str, torch.Tensor]
+Trajectory = Dict[str, Any]
 
 __all__ = [
     "ObjectiveSpec",
     "ObjectiveRegistry",
     "Trajectory",
     "detach_trajectory",
-    "TaskConfig",
 ]
 
 
@@ -78,7 +78,7 @@ class ObjectiveRegistry:
 
 
 def detach_trajectory(
-    trajectory: Mapping[str, torch.Tensor],
+    trajectory: Mapping[str, Any],
     *,
     dtype: torch.dtype,
     device: torch.device,
@@ -86,16 +86,6 @@ def detach_trajectory(
     """Detach a trajectory dictionary to the requested dtype/device."""
     out: Trajectory = {}
     for key, value in trajectory.items():
-        out[key] = value.detach().to(dtype=dtype, device=device)
+        out[key] = (value.detach().to(dtype=dtype, device=device)
+                    if isinstance(value, torch.Tensor) else deepcopy(value))
     return out
-
-
-@dataclass(frozen=True)
-class TaskConfig:
-    """Shared configuration payload for task modules."""
-
-    name: str
-    dim: int
-    bounds: torch.Tensor  # shape: [2, dim]
-    is_minimization: bool = True
-    metadata: Dict[str, Any] | None = None

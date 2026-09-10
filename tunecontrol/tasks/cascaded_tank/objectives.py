@@ -22,11 +22,11 @@ _OBJECTIVES = ObjectiveRegistry()
 
 
 def _x2_column(traj: Trajectory) -> torch.Tensor:
-    return traj["x2"]
+    return traj["states"][:, 1]
 
 
 def _inputs_column(traj: Trajectory) -> torch.Tensor:
-    return traj["u"].view(-1, 1)
+    return traj["inputs"]
 
 
 def _time_vector(traj: Trajectory) -> torch.Tensor:
@@ -50,31 +50,44 @@ def _sse(sim: CascadedTankSimulator, traj: Trajectory) -> torch.Tensor:
 
 
 def _quadratic(sim: CascadedTankSimulator, traj: Trajectory) -> torch.Tensor:
-    x2 = _x2_column(traj).unsqueeze(-1)
+    """Mean LQR-style tracking cost with unit state-error and pump-input weights."""
+    tracking_error = (_x2_column(traj) - sim.target).unsqueeze(-1)
     inputs = _inputs_column(traj)
-    q = torch.tensor([[1.0]], dtype=x2.dtype, device=x2.device)
+    q = torch.tensor([[1.0]], dtype=tracking_error.dtype, device=tracking_error.device)
     r = torch.tensor([[1.0]], dtype=inputs.dtype, device=inputs.device)
-    state_term = torch.einsum("ni,ij,nj->n", x2, q, x2)
+    state_term = torch.einsum("ni,ij,nj->n", tracking_error, q, tracking_error)
     input_term = torch.einsum("ni,ij,nj->n", inputs, r, inputs)
-    return torch.sum(state_term + input_term)
+    return torch.mean(state_term + input_term)
 
 
 def _overshoot(sim: CascadedTankSimulator, traj: Trajectory) -> torch.Tensor:
     x2 = _x2_column(traj)
     target = torch.tensor(sim.target, dtype=x2.dtype, device=x2.device)
-    overshoot = (torch.max(x2) - target) / target
-    return overshoot
+    peak_excess = torch.clamp(torch.max(x2) - target, min=0.0)
+    return 100.0 * peak_excess / target
 
 
 def _rise_time(sim: CascadedTankSimulator, traj: Trajectory) -> torch.Tensor:
     response = _x2_column(traj)
     times = _time_vector(traj)
     target = torch.tensor(sim.target, dtype=response.dtype, device=response.device)
-    lower_bound = target * 0.1
-    upper_bound = target * 0.9
+    initial = response[0]
+    change = target - initial
+    if change == 0:
+        # No commanded change has zero rise time.
+        return torch.zeros((), dtype=response.dtype, device=response.device)
 
-    lower_indices = torch.nonzero(response >= lower_bound, as_tuple=False)
-    upper_indices = torch.nonzero(response >= upper_bound, as_tuple=False)
+    lower_level = initial + 0.1 * change
+    upper_level = initial + 0.9 * change
+    # Compare levels directly so samples equal to a threshold count as crossings.
+    if change > 0:
+        lower_crossed = response >= lower_level
+        upper_crossed = response >= upper_level
+    else:
+        lower_crossed = response <= lower_level
+        upper_crossed = response <= upper_level
+    lower_indices = torch.nonzero(lower_crossed, as_tuple=False)
+    upper_indices = torch.nonzero(upper_crossed, as_tuple=False)
     if lower_indices.numel() == 0 or upper_indices.numel() == 0:
         return torch.tensor(float("nan"), dtype=response.dtype, device=response.device)
     lower_index = lower_indices[0, 0]

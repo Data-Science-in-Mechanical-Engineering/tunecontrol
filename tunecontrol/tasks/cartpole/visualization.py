@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
 
-try:
-    import torch
-except ModuleNotFoundError:  # pragma: no cover
-    torch = None  # type: ignore[assignment]
+import torch
 
 
 def _to_numpy(array: Sequence[float]) -> np.ndarray:
-    if torch is not None and isinstance(array, torch.Tensor):
+    if isinstance(array, torch.Tensor):
         return array.detach().cpu().numpy()
     return np.asarray(array, dtype=np.float64)
 
 
-def plot_episode(trajectory: Mapping[str, Sequence[float]], title: str = "CartPole Episode") -> None:
+def plot_episode(trajectory: Mapping[str, Any], title: str = "CartPole Episode") -> None:
     """Plot state and control trajectories from a cart-pole episode."""
+    import matplotlib.pyplot as plt
+
     time = _to_numpy(trajectory.get("time", []))
     states = _to_numpy(trajectory.get("states", []))
     inputs = _to_numpy(trajectory.get("inputs", []))
@@ -51,7 +49,7 @@ def plot_episode(trajectory: Mapping[str, Sequence[float]], title: str = "CartPo
     axs[3].set_ylabel("Angular Velocity (rad/s)")
 
     axs[4].plot(time, u, label="Control Input (u)", color="purple")
-    axs[4].set_ylabel("Force (N)")
+    axs[4].set_ylabel("Control input")
     axs[4].set_xlabel("Time (s)")
 
     for ax in axs:

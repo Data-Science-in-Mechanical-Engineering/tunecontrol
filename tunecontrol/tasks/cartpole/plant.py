@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Tuple, Union
 
 import torch
 from scipy.linalg import solve_continuous_are
+
+from ...random import new_generator
+from ..module_utils import Trajectory, detach_trajectory
 
 __all__ = ["CartPoleSimulator"]
 
 
 DTYPE = torch.float64
 Tensor = torch.Tensor
-Trajectory = Dict[str, Tensor]
 
 
 @dataclass
@@ -27,6 +29,7 @@ class CartPoleSimulator:
     simulation_time: float = 30.0
     Q_weight: float = 10.0
     R_weight: float = 1.0
+    generator: torch.Generator = field(default_factory=new_generator, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if not 1 <= self.dim <= 4:
@@ -50,21 +53,29 @@ class CartPoleSimulator:
     def cost_weights(self) -> Tuple[Tensor, Tensor]:
         return self.Q.clone(), self.R.clone()
 
-    def run_episode(self, theta: Tensor) -> Trajectory:
+    def run_episode(
+        self, theta: Tensor, *, generator: torch.Generator | None = None
+    ) -> Trajectory:
         theta = theta.to(dtype=DTYPE)
         if theta.ndim != 1 or theta.shape[0] != self.dim:
             raise ValueError(f"theta must be shape ({self.dim},), got {tuple(theta.shape)}")
 
         controller = self._construct_controller(theta)
-        states, inputs, reference, time = self._simulate_system(controller)
+        states, inputs, reference, time = self._simulate_system(
+            controller, self.generator if generator is None else generator
+        )
 
         trajectory = {
             "time": time,
             "states": states,
-            "inputs": inputs,
+            "inputs": inputs.reshape(-1, 1),
+            "state_names": ("cart_position", "cart_velocity", "pole_angle", "pole_angular_velocity"),
+            "state_units": ("m", "m/s", "rad", "rad/s"),
+            "input_names": ("control_input",),
+            "input_units": (None,),
             "reference": reference,
         }
-        self.last_episode = {key: tensor.clone() for key, tensor in trajectory.items()}
+        self.last_episode = detach_trajectory(trajectory, dtype=DTYPE, device=states.device)
         return trajectory
 
     # ------------------------------------------------------------------
@@ -127,7 +138,7 @@ class CartPoleSimulator:
         Bd = ms[: A.shape[0], A.shape[1] :]
         return Ad, Bd, A, B
 
-    def _simulate_system(self, K: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def _simulate_system(self, K: Tensor, generator: torch.Generator) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         n_steps = int(math.ceil(self.simulation_time / self.sample_time))
         time = torch.arange(n_steps, dtype=DTYPE) * self.sample_time
         states = torch.zeros((n_steps, 4), dtype=DTYPE)
@@ -147,6 +158,7 @@ class CartPoleSimulator:
                     mean=0.0,
                     std=init_std,
                     size=(4,),
+                    generator=generator,
                     dtype=DTYPE,
                 )
 
@@ -169,6 +181,7 @@ class CartPoleSimulator:
                         mean=0.0,
                         std=process_noise,
                         size=current_state.shape,
+                        generator=generator,
                         dtype=DTYPE,
                     )
                     next_state = next_state + noise

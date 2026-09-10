@@ -8,6 +8,9 @@ from typing import Dict, Optional
 
 import torch
 
+from ...random import new_generator
+from ..module_utils import Trajectory
+
 __all__ = [
     "ProportionalIntegralController",
     "CascadedTankDynamic",
@@ -17,7 +20,6 @@ __all__ = [
 
 
 Tensor = torch.Tensor
-Trajectory = Dict[str, Tensor]
 DTYPE = torch.float64
 
 
@@ -52,6 +54,7 @@ class CascadedTankDynamic:
         initial_state: Tensor | None = None,
         time_step: float = 4.0,
     ) -> None:
+        self.generator = new_generator()
         self.k1 = torch.tensor(k1, dtype=DTYPE)
         self.k2 = torch.tensor(k2, dtype=DTYPE)
         self.k3 = torch.tensor(k3, dtype=DTYPE)
@@ -74,6 +77,8 @@ class CascadedTankDynamic:
         state: Optional[Tensor] = None,
         u_control_input: Tensor | float = 0.0,
         noise_std_dev: float = 0.005,
+        *,
+        generator: torch.Generator | None = None,
     ) -> Tensor:
         if state is None:
             state = self.state
@@ -90,11 +95,16 @@ class CascadedTankDynamic:
             self.k2 * torch.sqrt(input_state[0]) - self.k3 * torch.sqrt(input_state[1])
         )
 
-        next_state = torch.clamp(next_state, min=0.0, max=10.0)
         if noise_std_dev:
-            noise = torch.randn_like(next_state) * noise_std_dev
+            noise = torch.randn(
+                next_state.shape,
+                dtype=next_state.dtype,
+                device=next_state.device,
+                generator=self.generator if generator is None else generator,
+            ) * noise_std_dev
             next_state = next_state + noise
-        return next_state
+        # Physical tank limits apply to the disturbed state as well.
+        return torch.clamp(next_state, min=0.0, max=10.0)
 
 
 @dataclass
@@ -105,12 +115,16 @@ class CascadedTankSimulator:
     target: float = 4.0
     noise_std: float = 0.005
     dynamic_kwargs: Dict[str, float] = field(default_factory=dict)
+    generator: torch.Generator = field(default_factory=new_generator, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         self.dynamic = CascadedTankDynamic(**self.dynamic_kwargs)
         self.data: Optional[Trajectory] = None
 
-    def simulate(self, k_p: float, k_i: float) -> Trajectory:
+    def simulate(
+        self, k_p: float, k_i: float, *, generator: torch.Generator | None = None
+    ) -> Trajectory:
+        generator = self.generator if generator is None else generator
         controller = ProportionalIntegralController(k_p=k_p, k_i=k_i)
         controller.reset()
 
@@ -134,7 +148,9 @@ class CascadedTankSimulator:
         times.append(time.clone())
 
         for _ in range(total_steps):
-            next_state = dynamic.make_environment_step(dynamic.state, control, self.noise_std)
+            next_state = dynamic.make_environment_step(
+                dynamic.state, control, self.noise_std, generator=generator
+            )
             dynamic.set_state(next_state)
 
             time = time + dynamic.time_step
@@ -147,8 +163,11 @@ class CascadedTankSimulator:
 
         self.data = {
             "time": torch.stack(times),
-            "x1": torch.stack(x1_levels),
-            "x2": torch.stack(x2_levels),
-            "u": torch.stack(control_inputs),
+            "states": torch.stack((torch.stack(x1_levels), torch.stack(x2_levels)), dim=1),
+            "inputs": torch.stack(control_inputs).reshape(-1, 1),
+            "state_names": ("upper_tank_level", "lower_tank_level"),
+            "state_units": ("cm", "cm"),
+            "input_names": ("pump_voltage",),
+            "input_units": ("V",),
         }
         return self.data
