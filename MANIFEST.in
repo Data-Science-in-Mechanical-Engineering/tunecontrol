@@ -1,0 +1,3 @@
+include CITATION.cff
+include docs/releasing.md
+include tests/test_distribution.py
