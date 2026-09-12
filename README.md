@@ -12,16 +12,16 @@ with your own optimizer or add a new problem family.
 
 ## Install
 
-TuneControl currently supports **Python 3.12**. Install from GitHub:
+TuneControl currently supports **Python 3.12**. Install from PyPI:
 
 ```bash
-python -m pip install "tunecontrol @ git+https://github.com/Data-Science-in-Mechanical-Engineering/tunecontrol.git"
+python -m pip install tunecontrol
 ```
 
 For the Bayesian optimization notebook, include BoTorch:
 
 ```bash
-python -m pip install "tunecontrol[botorch] @ git+https://github.com/Data-Science-in-Mechanical-Engineering/tunecontrol.git"
+python -m pip install "tunecontrol[botorch]"
 ```
 
 For development from a local checkout, run `python -m pip install -e '.[dev,botorch]'`.
